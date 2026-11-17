@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MapsAwake</string>
+    <string name="a11y_description">Mantiene la pantalla encendida mientras Google Maps está en primer plano y la devuelve a tus ajustes al salir. Solo mira qué app está delante; no lee texto ni pulsaciones.</string>
+    <string name="sw_enabled">Activo</string>
+    <string name="sw_brightness">Brillo al máximo</string>
+</resources>

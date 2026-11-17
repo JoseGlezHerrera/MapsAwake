@@ -1,0 +1,10 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+# Valores leídos de TU reloj (los genera install.sh)
+.valores-originales-reloj.txt
+.watch-original.env
