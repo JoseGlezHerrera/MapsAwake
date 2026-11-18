@@ -62,7 +62,7 @@ ventana.
 
 ## Requisitos
 
-- Linux con `adb` (android-tools), **JDK 17**
+- `adb` (android-tools). Solo para compilar: Linux con **JDK 17**
   (`/usr/lib/jvm/java-17-openjdk`) y Android SDK con `platforms;android-37` en
   `~/Android/Sdk`. El Gradle wrapper (9.9.1) se descarga solo.
 - Reloj con **Opciones de desarrollador** y **Depuración inalámbrica** activadas.
@@ -85,7 +85,29 @@ que la red no deje pasar tráfico entre equipos (repetidores wifi, aislamiento
 de clientes). Lo más fácil: conectar reloj y portátil al **punto de acceso del
 móvil**. En Arch con NetworkManager: `nmcli dev wifi connect <red> password …`.
 
-## Instalación
+## Instalación desde la release (sin compilar)
+
+Solo hace falta `adb` (ver *Conectar el reloj*). Descarga `MapsAwake-<versión>.apk`
+de [Releases](https://github.com/JoseGlezHerrera/MapsAwake/releases) y, con
+`S=<serial_del_reloj>`:
+
+```bash
+adb -s $S install -r MapsAwake-1.0.apk
+adb -s $S shell appops set dev.mapsawake WRITE_SETTINGS allow
+adb -s $S shell settings get secure enabled_accessibility_services   # anota lo que salga
+adb -s $S shell settings put secure enabled_accessibility_services dev.mapsawake/dev.mapsawake.MapsWatcherService
+adb -s $S shell settings put secure accessibility_enabled 1
+adb -s $S shell dumpsys deviceidle whitelist +dev.mapsawake
+```
+
+Si el `settings get` devolvió algo distinto de `null`, en el `settings put`
+pon esos servicios delante separados por `:` para no desactivarlos
+(`<lo_anotado>:dev.mapsawake/dev.mapsawake.MapsWatcherService`).
+
+Con el repo clonado, `./install.sh <serial> MapsAwake-1.0.apk` hace lo mismo
+comprobando cada paso.
+
+## Instalación compilando
 
 ```bash
 ./install.sh <serial_del_reloj>      # p. ej. ./install.sh 10.18.151.33:39849
@@ -94,7 +116,8 @@ móvil**. En Arch con NetworkManager: `nmcli dev wifi connect <red> password …
 El script se niega a seguir si el dispositivo no es un reloj
 (`ro.build.characteristics` sin `watch`), y luego:
 
-1. compila el APK *release* (R8, ~470 KB, firmado con la clave debug local);
+1. compila el APK *release* (R8, ~490 KB; ver *Firma*) o usa el APK que le
+   pases como 2º argumento;
 2. apunta los valores originales del reloj en `.watch-original.env` (no versionado);
 3. instala con `adb -s <serial> install -r`;
 4. concede `WRITE_SETTINGS` con `appops set dev.mapsawake WRITE_SETTINGS allow`;
@@ -136,9 +159,11 @@ adb -s $S logcat -s MapsAwake                             # Aplicado / Restaurad
   se mantiene encendida otra vez.
 - Si cambias el tiempo de pantalla **a mano con Maps delante**, al salir de
   Maps se vuelve al valor guardado al entrar.
-- El APK va firmado con la clave debug **de este portátil**
-  (`~/.android/debug.keystore`). Para actualizarlo desde otro equipo, antes hay
-  que desinstalarlo.
+- **Firma**: los APK de las releases van firmados con la clave del autor
+  (certificado SHA-256 `9f06563a…8475ba`). Si compilas tú, se firma con tu
+  clave debug, y Android no deja instalar una firma encima de otra: quita
+  antes la que tengas con `./restore.sh <serial>` (o `adb uninstall
+  dev.mapsawake`).
 - Si Samsung o una actualización desactivan el servicio de accesibilidad, la
   app lo indica en su pantalla (✗ Accesibilidad). Vuelve a lanzar `install.sh`.
 - Solo reconoce Google Maps (`com.google.android.apps.maps`). Para otra app,

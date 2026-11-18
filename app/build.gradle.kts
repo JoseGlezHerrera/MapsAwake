@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
@@ -14,16 +16,33 @@ android {
         versionName = "1.0"
     }
 
+    // Clave de las releases publicadas: fuera del repo, en
+    // ~/.config/mapsawake/keystore.properties (o la ruta de la propiedad
+    // Gradle mapsawake.keystore). Si no existe, se firma con la clave debug
+    // local y el APK no se podrá instalar encima de uno de las releases.
+    val releaseProps = File(
+        providers.gradleProperty("mapsawake.keystore").orNull
+            ?: "${System.getProperty("user.home")}/.config/mapsawake/keystore.properties"
+    )
+    if (releaseProps.isFile) {
+        val p = Properties().apply { releaseProps.inputStream().use { load(it) } }
+        signingConfigs.create("release") {
+            storeFile = File(p.getProperty("storeFile"))
+            storePassword = p.getProperty("storePassword")
+            keyAlias = p.getProperty("keyAlias")
+            keyPassword = p.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
             // R8 deja el APK en una fracción del tamaño (las librerías de la
-            // tile pesan). Se firma con la clave debug local (~/.android/
-            // debug.keystore): para uso personal basta, pero para actualizar
-            // hay que firmar siempre con la misma clave.
+            // tile pesan).
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 

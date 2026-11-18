@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Compila MapsAwake, la instala en el RELOJ y le da los permisos por adb.
-# Uso: ./install.sh <serial_del_reloj>     (p. ej. 10.18.151.33:39849)
+# Uso: ./install.sh <serial_del_reloj> [apk]   (p. ej. 10.18.151.33:39849)
 #      Mira el serial con: adb devices -l
+#      apk: un APK ya hecho (p. ej. el de una release de GitHub); así no compila.
 set -euo pipefail
+[ -n "${2:-}" ] && APK_ARG=$(realpath "$2")
 cd "$(dirname "$0")"
 
 PKG=dev.mapsawake
 SVC="$PKG/$PKG.MapsWatcherService"
-APK=app/build/outputs/apk/release/app-release.apk
+APK=${APK_ARG:-app/build/outputs/apk/release/app-release.apk}
 ORIG=.watch-original.env
 
 S="${1:-${WATCH_SERIAL:-}}"
-[ -n "$S" ] || { echo "Uso: $0 <serial_del_reloj>  (adb devices -l)"; exit 2; }
+[ -n "$S" ] || { echo "Uso: $0 <serial_del_reloj> [apk]  (adb devices -l)"; exit 2; }
 
 ok()   { printf '   \e[32m✓\e[0m %s\n' "$*"; }
 fail() { printf '   \e[31m✗ %s\e[0m\n' "$*"; exit 1; }
@@ -28,9 +30,14 @@ sdk=$(sh_ getprop ro.build.version.sdk)
 [[ "$chars" == *watch* ]] || fail "$model no es un reloj (ro.build.characteristics=$chars). Abortado."
 ok "$model, API $sdk"
 
-step "Compilo el APK release (Gradle con JDK 17)"
-JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew -q assembleRelease
-[ -f "$APK" ] || fail "no se generó $APK"
+if [ -n "${APK_ARG:-}" ]; then
+    step "Uso el APK indicado (sin compilar)"
+    [ -f "$APK" ] || fail "no existe $APK"
+else
+    step "Compilo el APK release (Gradle con JDK 17)"
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew -q assembleRelease
+    [ -f "$APK" ] || fail "no se generó $APK"
+fi
 ok "$APK ($(du -h "$APK" | cut -f1))"
 
 step "Apunto los valores originales del reloj en $ORIG (settings get: solo lectura)"
@@ -50,8 +57,10 @@ fi
 step "Instalo el APK (adb install -r: instala o actualiza conservando datos)"
 # La wifi del reloj da cortes: hasta 3 intentos.
 for i in 1 2 3; do
-    a install -r "$APK" >/dev/null && break
-    [ "$i" = 3 ] && fail "adb install falló 3 veces"
+    out=$(a install -r "$APK" 2>&1) && break
+    [[ "$out" == *INSTALL_FAILED_UPDATE_INCOMPATIBLE* ]] &&
+        fail "la versión instalada está firmada con otra clave. Quítala con ./restore.sh $S y repite."
+    [ "$i" = 3 ] && fail "adb install falló 3 veces: $out"
     echo "   reintento $((i + 1))/3…"
 done
 sh_ pm path "$PKG" | grep base.apk >/dev/null || fail "no aparece instalada"
